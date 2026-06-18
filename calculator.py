@@ -1,416 +1,349 @@
 """
-Enhanced Simple Calculator with Real Calculator UI
+Enhanced Simple Calculator with Modern GUI
 
 Features:
-- Looks and feels like a real calculator
-- Interactive grid-based button layout
-- Persistent display screen showing current input and results
-- Support for chaining operations (press = to see result, continue calculating)
-- Command-line mode: `python calculator.py 2 + 3`
-- REPL mode: `python calculator.py --repl`
+- Modern desktop GUI with dark theme
+- Colorful, interactive buttons with hover effects
+- Large, readable display screen
+- Support for basic arithmetic operations
+- Keyboard support for all operations
+- History display showing previous calculations
+- Real calculator feel with smooth interactions
+- Error handling with user-friendly messages
 
-Usage examples:
-- Interactive calculator: `python calculator.py`
-- One-off expression: `python calculator.py 2 + 3`
-- REPL mode: `python calculator.py --repl`
+Usage:
+- Run: `python calculator.py`
 
 """
 
-from typing import Callable, Optional
-import argparse
-import sys
-import os
+import tkinter as tk
+from tkinter import font
+import math
+from typing import Optional
+
+
+# ============================================================================
+# Color Scheme
+# ============================================================================
+
+COLORS = {
+    "bg_dark": "#1e1e1e",
+    "bg_darker": "#121212",
+    "display_bg": "#2d2d2d",
+    "display_text": "#00ff88",
+    "history_text": "#888888",
+    "button_number": "#3d3d3d",
+    "button_number_hover": "#4d4d4d",
+    "button_operator": "#ff6b35",
+    "button_operator_hover": "#ff8555",
+    "button_equals": "#00d084",
+    "button_equals_hover": "#00ff9d",
+    "button_clear": "#e74c3c",
+    "button_clear_hover": "#ff6b6b",
+    "text_primary": "#ffffff",
+    "text_secondary": "#888888",
+}
 
 
 # ============================================================================
 # Core Calculator Operations
 # ============================================================================
 
-def add(a: float, b: float) -> float:
-    return a + b
-
-
-def subtract(a: float, b: float) -> float:
-    return a - b
-
-
-def multiply(a: float, b: float) -> float:
-    return a * b
-
-
-def divide(a: float, b: float) -> float:
-    if b == 0:
-        raise ZeroDivisionError("Cannot divide by zero")
-    return a / b
-
-
-def power(a: float, b: float) -> float:
-    return a ** b
-
-
-def modulus(a: float, b: float) -> float:
-    if b == 0:
-        raise ZeroDivisionError("Cannot modulo by zero")
-    return a % b
-
-
-# Operator mapping
-OPERATORS = {
-    "+": (add, "Add"),
-    "-": (subtract, "Subtract"),
-    "*": (multiply, "Multiply"),
-    "/": (divide, "Divide"),
-    "^": (power, "Power"),
-    "%": (modulus, "Modulo"),
-}
-
-# Extended input mappings for all operator names
-OPERATOR_NAMES = {
-    "+": "+", "add": "+", "plus": "+",
-    "-": "-", "sub": "-", "subtract": "-", "minus": "-",
-    "*": "*", "x": "*", "mul": "*", "multiply": "*",
-    "/": "/", "div": "/", "divide": "/",
-    "^": "^", "**": "^", "pow": "^", "power": "^",
-    "%": "%", "mod": "%", "modulo": "%",
-}
-
-TOKEN_TO_FUNC = {
-    "+": add, "add": add, "plus": add,
-    "-": subtract, "sub": subtract, "subtract": subtract, "minus": subtract,
-    "*": multiply, "x": multiply, "mul": multiply, "multiply": multiply,
-    "/": divide, "div": divide, "divide": divide,
-    "^": power, "**": power, "pow": power, "power": power,
-    "%": modulus, "mod": modulus, "modulo": modulus,
-}
-
-
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-def format_result(res: float) -> str:
-    """Format result, showing integers without decimal point."""
-    if isinstance(res, float) and res.is_integer():
-        return str(int(res))
-    return str(res)
-
-
-def clear_screen():
-    """Clear the terminal screen."""
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-
-def compute_tokens(a_tok: str, op_tok: str, b_tok: str, last_result: Optional[float] = None) -> float:
-    """Compute result from token strings."""
-    def to_number(tok: str) -> float:
-        if tok == "_":
-            if last_result is None:
-                raise ValueError("No previous result available for '_'.")
-            return last_result
-        try:
-            return int(tok) if tok.lstrip("-+").isdigit() else float(tok)
-        except ValueError:
-            raise ValueError(f"Invalid number: {tok}")
-
-    a = to_number(a_tok)
-    b = to_number(b_tok)
-    func = TOKEN_TO_FUNC.get(op_tok.lower())
-    if func is None:
-        raise ValueError(f"Unknown operator: {op_tok}")
-    return func(a, b)
-
-
-def one_off_expression(args: list[str], last_result: Optional[float] = None) -> Optional[float]:
-    """Parse and compute a single expression from CLI arguments."""
-    if not args:
-        return None
-    
-    if len(args) == 1:
-        raw = args[0].strip()
-        for op in ["**", "+", "-", "*", "/", "%", "^"]:
-            if op in raw and op != "-":
-                parts = raw.split(op)
-                if len(parts) == 2:
-                    a_tok, b_tok = parts[0].strip(), parts[1].strip()
-                    return compute_tokens(a_tok, op, b_tok, last_result)
-    
-    if len(args) >= 3:
-        a_tok = args[0]
-        op_tok = args[1]
-        b_tok = args[2]
-        return compute_tokens(a_tok, op_tok, b_tok, last_result)
-    
-    return None
-
-
-# ============================================================================
-# Calculator Display UI
-# ============================================================================
-
-class CalculatorUI:
-    """A real-looking calculator interface."""
+class Calculator:
+    """Core calculator logic."""
     
     def __init__(self):
-        self.display = "0"
-        self.current_input = ""
-        self.operator = None
-        self.first_operand = None
-        self.new_number = True
+        self.expression = ""
+        self.result = None
+        self.history = []
     
-    def draw_display(self):
-        """Draw the calculator display screen."""
-        print("\n" + "╔" + "═" * 40 + "╗")
-        print("║" + " " * 40 + "║")
+    def add_character(self, char: str) -> str:
+        """Add a character to the expression."""
+        if char == "." and "." in self.expression.split()[-1:]:
+            return self.expression
+        self.expression += str(char)
+        return self.expression
+    
+    def backspace(self) -> str:
+        """Remove last character."""
+        self.expression = self.expression[:-1]
+        return self.expression
+    
+    def clear(self) -> str:
+        """Clear the expression."""
+        self.expression = ""
+        self.result = None
+        return self.expression
+    
+    def calculate(self) -> str:
+        """Evaluate the expression."""
+        if not self.expression:
+            return ""
         
-        # Show the display value (right-aligned)
-        display_str = str(self.display)
-        if len(display_str) > 35:
-            display_str = display_str[-35:]
-        padding = 35 - len(display_str)
-        print(f"║{' ' * padding}{display_str}{' ' * 5}║")
-        print("║" + " " * 40 + "║")
-        print("╚" + "═" * 40 + "╝\n")
+        try:
+            # Replace ÷ and × with / and *
+            expr = self.expression.replace("÷", "/").replace("×", "*").replace("^", "**")
+            
+            # Evaluate the expression
+            result = eval(expr)
+            
+            # Store in history
+            self.history.append(f"{self.expression} = {result}")
+            if len(self.history) > 10:
+                self.history.pop(0)
+            
+            self.expression = str(result)
+            self.result = result
+            return self.expression
+        
+        except ZeroDivisionError:
+            self.expression = ""
+            return "Error: Division by zero"
+        except SyntaxError:
+            self.expression = ""
+            return "Error: Invalid expression"
+        except Exception as e:
+            self.expression = ""
+            return f"Error: {str(e)}"
     
-    def draw_buttons(self):
-        """Draw the calculator button grid."""
+    def get_history(self) -> list:
+        """Get calculation history."""
+        return self.history
+
+
+# ============================================================================
+# Modern Calculator GUI
+# ============================================================================
+
+class CalculatorGUI:
+    """Modern calculator interface with tkinter."""
+    
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        self.root.title("Modern Calculator")
+        self.root.geometry("500x750")
+        self.root.resizable(False, False)
+        self.root.configure(bg=COLORS["bg_dark"])
+        
+        # Set custom fonts
+        self.display_font = font.Font(family="Courier New", size=28, weight="bold")
+        self.history_font = font.Font(family="Arial", size=10)
+        self.button_font = font.Font(family="Arial", size=16, weight="bold")
+        
+        self.calculator = Calculator()
+        self.current_display = ""
+        
+        self.setup_ui()
+        self.bind_keyboard()
+    
+    def setup_ui(self):
+        """Setup the user interface."""
+        # Main container
+        main_frame = tk.Frame(self.root, bg=COLORS["bg_dark"])
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Title
+        title_label = tk.Label(
+            main_frame,
+            text="Calculator",
+            font=font.Font(family="Arial", size=20, weight="bold"),
+            bg=COLORS["bg_dark"],
+            fg=COLORS["text_primary"]
+        )
+        title_label.pack(pady=(0, 10))
+        
+        # Display frame
+        display_frame = tk.Frame(main_frame, bg=COLORS["display_bg"], relief=tk.SUNKEN, bd=2)
+        display_frame.pack(fill=tk.BOTH, expand=False, pady=(0, 10))
+        
+        # History display
+        self.history_label = tk.Label(
+            display_frame,
+            text="",
+            font=self.history_font,
+            bg=COLORS["display_bg"],
+            fg=COLORS["history_text"],
+            anchor="e",
+            justify="right"
+        )
+        self.history_label.pack(fill=tk.X, padx=10, pady=(5, 0))
+        
+        # Main display
+        self.display_label = tk.Label(
+            display_frame,
+            text="0",
+            font=self.display_font,
+            bg=COLORS["display_bg"],
+            fg=COLORS["display_text"],
+            anchor="e",
+            justify="right"
+        )
+        self.display_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Button frame
+        button_frame = tk.Frame(main_frame, bg=COLORS["bg_dark"])
+        button_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Button layout
         buttons = [
-            ["7", "8", "9", "/"],
-            ["4", "5", "6", "*"],
-            ["1", "2", "3", "-"],
-            ["0", ".", "=", "+"],
-            ["C", "^", "%", "←"],
+            ["C", "←", "÷", "×"],
+            ["7", "8", "9", "-"],
+            ["4", "5", "6", "+"],
+            ["1", "2", "3", "."],
+            ["0", "^", "=", "√"],
         ]
         
-        button_width = 9
+        self.button_widgets = {}
         
-        for row in buttons:
-            print("  ", end="")
-            for btn in row:
-                print(f"┌─────────┐", end="  ")
-            print()
+        for row_idx, row in enumerate(buttons):
+            row_frame = tk.Frame(button_frame, bg=COLORS["bg_dark"])
+            row_frame.pack(fill=tk.BOTH, expand=True, pady=5)
             
-            print("  ", end="")
-            for btn in row:
-                centered = btn.center(9)
-                print(f"│{centered}│", end="  ")
-            print()
-            
-            print("  ", end="")
-            for btn in row:
-                print(f"└─────────┘", end="  ")
-            print()
+            for col_idx, btn_text in enumerate(row):
+                self.create_button(row_frame, btn_text, col_idx, row_idx)
     
-    def process_input(self, btn: str) -> bool:
-        """Process a button press. Returns False if calculator should exit."""
+    def create_button(self, parent: tk.Frame, text: str, col: int, row: int):
+        """Create a button with styling and hover effects."""
+        # Determine button type and colors
+        if text == "C":
+            bg_color = COLORS["button_clear"]
+            hover_color = COLORS["button_clear_hover"]
+        elif text == "=":
+            bg_color = COLORS["button_equals"]
+            hover_color = COLORS["button_equals_hover"]
+        elif text in ["÷", "×", "-", "+", ".", "^", "√", "←"]:
+            bg_color = COLORS["button_operator"]
+            hover_color = COLORS["button_operator_hover"]
+        else:
+            bg_color = COLORS["button_number"]
+            hover_color = COLORS["button_number_hover"]
         
-        if btn == "C":
-            # Clear
-            self.display = "0"
-            self.current_input = ""
-            self.operator = None
-            self.first_operand = None
-            self.new_number = True
+        # Create button
+        btn = tk.Button(
+            parent,
+            text=text,
+            font=self.button_font,
+            bg=bg_color,
+            fg=COLORS["text_primary"],
+            border=0,
+            relief=tk.RAISED,
+            activebackground=hover_color,
+            activeforeground=COLORS["text_primary"],
+            command=lambda: self.on_button_click(text),
+            cursor="hand2",
+            bd=2,
+            highlightthickness=0
+        )
         
-        elif btn == "←":
-            # Backspace
-            if self.current_input:
-                self.current_input = self.current_input[:-1]
-                self.display = self.current_input if self.current_input else "0"
-            elif self.display != "0":
-                self.display = self.display[:-1] if len(self.display) > 1 else "0"
+        btn.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5)
         
-        elif btn == ".":
-            # Decimal point
-            if self.new_number:
-                self.current_input = "0."
-                self.display = "0."
-                self.new_number = False
-            elif "." not in self.current_input:
-                self.current_input += "."
-                self.display = self.current_input
+        # Store button reference
+        self.button_widgets[text] = btn
         
-        elif btn.isdigit():
-            # Number input
-            if self.new_number:
-                self.current_input = btn
-                self.new_number = False
-            else:
-                self.current_input += btn
-            self.display = self.current_input
-        
-        elif btn in OPERATORS or btn == "^" or btn == "%":
-            # Operator
-            if self.operator and self.current_input and self.first_operand is not None:
-                # Chain calculation
-                try:
-                    result = compute_tokens(str(self.first_operand), self.operator, self.current_input)
-                    self.first_operand = result
-                    self.display = format_result(result)
-                except ZeroDivisionError:
-                    self.display = "Error: Division by zero"
-                except Exception as e:
-                    self.display = f"Error: {str(e)}"
-                self.current_input = ""
-            elif self.current_input:
-                try:
-                    self.first_operand = float(self.current_input)
-                except ValueError:
-                    self.display = "Error: Invalid number"
-                    return True
-                self.current_input = ""
-            elif self.first_operand is None:
-                try:
-                    self.first_operand = float(self.display)
-                except ValueError:
-                    self.display = "Error: Invalid number"
-                    return True
-            
-            self.operator = btn
-            self.new_number = True
-        
-        elif btn == "=":
-            # Calculate
-            if self.operator and self.current_input and self.first_operand is not None:
-                try:
-                    result = compute_tokens(str(self.first_operand), self.operator, self.current_input)
-                    self.display = format_result(result)
-                    self.first_operand = result
-                    self.current_input = ""
-                    self.operator = None
-                    self.new_number = True
-                except ZeroDivisionError:
-                    self.display = "Error: Division by zero"
-                except Exception as e:
-                    self.display = f"Error: {str(e)}"
-            elif self.first_operand is not None:
-                self.display = format_result(self.first_operand)
-                self.current_input = ""
-        
-        return True
+        # Bind hover effects
+        btn.bind("<Enter>", lambda e: self.on_button_enter(btn, hover_color, text))
+        btn.bind("<Leave>", lambda e: self.on_button_leave(btn, bg_color, text))
     
-    def run(self) -> int:
-        """Run the interactive calculator."""
-        try:
-            while True:
-                clear_screen()
-                print("\n" + "=" * 50)
-                print("         CALCULATOR".center(50))
-                print("=" * 50)
-                
-                self.draw_display()
-                self.draw_buttons()
-                
-                print("\n  (Enter button or type 'quit' to exit)")
-                user_input = input("  Button: ").strip().lower()
-                
-                if user_input == "quit":
-                    clear_screen()
-                    print("Thank you for using Calculator!")
-                    return 0
-                
-                # Match input to button
-                valid_buttons = ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-",
-                                "0", ".", "=", "+", "c", "^", "%", "←", "backspace"]
-                
-                if user_input in valid_buttons:
-                    btn = user_input
-                    if btn == "backspace":
-                        btn = "←"
-                    if btn == "c":
-                        btn = "C"
-                    self.process_input(btn)
-                else:
-                    print("Invalid button. Please try again.")
-                    input("Press Enter to continue...")
-        
-        except KeyboardInterrupt:
-            print("\n\nCalculator closed.")
-            return 0
-
-
-# ============================================================================
-# REPL Mode
-# ============================================================================
-
-def repl_mode() -> int:
-    """Run REPL mode for chaining calculations."""
-    print("\n" + "=" * 50)
-    print("         CALCULATOR - REPL MODE".center(50))
-    print("=" * 50)
-    print("\nEnter expressions like: 2 + 3")
-    print("Use '_' to reference the last result")
-    print("Type 'quit' or 'exit' to exit.\n")
+    def on_button_enter(self, btn: tk.Button, hover_color: str, text: str):
+        """Handle button hover enter."""
+        btn.config(bg=hover_color)
     
-    last = None
+    def on_button_leave(self, btn: tk.Button, bg_color: str, text: str):
+        """Handle button hover leave."""
+        btn.config(bg=bg_color)
     
-    try:
-        while True:
-            raw = input("> ").strip()
-            
-            if not raw:
-                continue
-            
-            if raw.lower() in ("quit", "exit"):
-                print("Goodbye!")
-                return 0
-            
-            tokens = raw.split()
-            
+    def on_button_click(self, char: str):
+        """Handle button click."""
+        if char == "C":
+            self.calculator.clear()
+            self.current_display = ""
+        elif char == "←":
+            self.calculator.backspace()
+            self.current_display = self.calculator.expression
+        elif char == "=":
+            result = self.calculator.calculate()
+            self.current_display = result
+            self.update_history()
+        elif char == "√":
             try:
-                res = one_off_expression(tokens, last)
-                if res is None:
-                    print("Could not parse expression. Try: number operator number")
-                    continue
-                last = res
-                print(f"= {format_result(res)}\n")
-            except ZeroDivisionError as e:
-                print(f"Error: {e}\n")
+                result = eval(self.calculator.expression)
+                result = math.sqrt(result)
+                self.calculator.expression = str(result)
+                self.current_display = self.calculator.expression
             except Exception as e:
-                print(f"Error: {e}\n")
+                self.current_display = "Error"
+        elif char == "÷":
+            self.calculator.add_character("/")
+            self.current_display = self.calculator.expression
+        elif char == "×":
+            self.calculator.add_character("*")
+            self.current_display = self.calculator.expression
+        elif char == "^":
+            self.calculator.add_character("**")
+            self.current_display = self.calculator.expression
+        else:
+            self.calculator.add_character(char)
+            self.current_display = self.calculator.expression
+        
+        self.update_display()
     
-    except KeyboardInterrupt:
-        print("\n\nCalculator closed.")
-        return 0
+    def update_display(self):
+        """Update the display label."""
+        display_text = self.current_display if self.current_display else "0"
+        
+        # Limit display length
+        if len(display_text) > 20:
+            display_text = display_text[-20:]
+        
+        self.display_label.config(text=display_text)
+    
+    def update_history(self):
+        """Update the history display."""
+        if self.calculator.history:
+            last_calc = self.calculator.history[-1]
+            self.history_label.config(text=last_calc)
+    
+    def bind_keyboard(self):
+        """Bind keyboard events."""
+        self.root.bind("<Key>", self.on_key_press)
+    
+    def on_key_press(self, event: tk.Event):
+        """Handle keyboard input."""
+        key = event.char
+        keysym = event.keysym
+        
+        if key.isdigit() or key in ".":
+            self.on_button_click(key)
+        elif key in "+-*/" or keysym == "slash":
+            if keysym == "slash":
+                self.on_button_click("÷")
+            else:
+                if key == "*":
+                    self.on_button_click("×")
+                else:
+                    self.on_button_click(key)
+        elif keysym == "Return":
+            self.on_button_click("=")
+        elif keysym == "BackSpace":
+            self.on_button_click("←")
+        elif keysym == "Escape":
+            self.on_button_click("C")
+        elif key.lower() == "s":
+            self.on_button_click("√")
+        elif key == "^":
+            self.on_button_click("^")
 
 
 # ============================================================================
 # Main
 # ============================================================================
 
-def main(argv: Optional[list[str]] = None) -> int:
-    if argv is None:
-        argv = sys.argv[1:]
-
-    parser = argparse.ArgumentParser(
-        description="Simple Calculator — Interactive UI, CLI, and REPL modes",
-        prog="calculator"
-    )
-    parser.add_argument("expr", nargs="*", help="One-off expression (e.g., '2 + 3')")
-    parser.add_argument("--repl", action="store_true", help="Start REPL mode for chaining calculations")
-    
-    ns = parser.parse_args(argv)
-
-    # REPL mode
-    if ns.repl:
-        return repl_mode()
-
-    # One-off expression
-    if ns.expr:
-        try:
-            res = one_off_expression(ns.expr)
-            if res is None:
-                print("Could not parse expression. Use: number operator number")
-                return 2
-            print(format_result(res))
-            return 0
-        except Exception as e:
-            print(f"Error: {e}")
-            return 3
-
-    # Interactive calculator UI
-    calc = CalculatorUI()
-    return calc.run()
+def main():
+    """Run the calculator application."""
+    root = tk.Tk()
+    gui = CalculatorGUI(root)
+    root.mainloop()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
