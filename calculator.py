@@ -1,18 +1,17 @@
 """
-Enhanced Simple Calculator (fully Python)
+Enhanced Simple Calculator with Real Calculator UI
 
-Features added:
-- Keeps the previous interactive menu with boxed symbols and flexible input (number, name, symbol).
-- Adds a command-line expression mode: `python calculator.py 2 + 3` or `python calculator.py "2 + 3"` to compute a single expression.
-- Adds a REPL mode: `python calculator.py --repl` to chain calculations using `_` to refer to the last result.
-- Adds a small, safe expression parser for `number operator number` (no eval), accepting symbols and words.
-- Improved formatting for integer results.
-- Functions are exported for easy unit testing.
+Features:
+- Looks and feels like a real calculator
+- Interactive grid-based button layout
+- Persistent display screen showing current input and results
+- Support for chaining operations (press = to see result, continue calculating)
+- Command-line mode: `python calculator.py 2 + 3`
+- REPL mode: `python calculator.py --repl`
 
 Usage examples:
-- Interactive menu: `python calculator.py`
+- Interactive calculator: `python calculator.py`
 - One-off expression: `python calculator.py 2 + 3`
-- One-off expression (quoted): `python calculator.py "2 + 3"`
 - REPL mode: `python calculator.py --repl`
 
 """
@@ -20,9 +19,12 @@ Usage examples:
 from typing import Callable, Optional
 import argparse
 import sys
-import operator
+import os
 
-# Public operation functions
+
+# ============================================================================
+# Core Calculator Operations
+# ============================================================================
 
 def add(a: float, b: float) -> float:
     return a + b
@@ -51,100 +53,55 @@ def modulus(a: float, b: float) -> float:
         raise ZeroDivisionError("Cannot modulo by zero")
     return a % b
 
-# Mapping of operation keys to (name, symbol, function)
-ops = {
-    "1": ("Addition", "➕", add),
-    "2": ("Subtraction", "➖", subtract),
-    "3": ("Multiplication", "✖", multiply),
-    "4": ("Division", "➗", divide),
-    "5": ("Power", "^", power),
-    "6": ("Modulus", "%", modulus),
+
+# Operator mapping
+OPERATORS = {
+    "+": (add, "Add"),
+    "-": (subtract, "Subtract"),
+    "*": (multiply, "Multiply"),
+    "/": (divide, "Divide"),
+    "^": (power, "Power"),
+    "%": (modulus, "Modulo"),
 }
 
-# Alternate inputs that map to an op key
-alternatives = {
-    "1": ["+", "add", "plus", "➕"],
-    "2": ["-", "sub", "subtract", "minus", "➖"],
-    "3": ["*", "x", "×", "mul", "multiply", "✖", "✖️"],
-    "4": ["/", "\\", "div", "divide", "÷", "➗"],
-    "5": ["^", "**", "pow", "power"],
-    "6": ["%", "mod", "modulo"],
+# Extended input mappings for all operator names
+OPERATOR_NAMES = {
+    "+": "+", "add": "+", "plus": "+",
+    "-": "-", "sub": "-", "subtract": "-", "minus": "-",
+    "*": "*", "x": "*", "mul": "*", "multiply": "*",
+    "/": "/", "div": "/", "divide": "/",
+    "^": "^", "**": "^", "pow": "^", "power": "^",
+    "%": "%", "mod": "%", "modulo": "%",
 }
 
-# Build a lookup from user input to operation key
-input_map = {}
-for k in ops:
-    name = ops[k][0]
-    sym = ops[k][1]
-    input_map[k] = k
-    input_map[name.lower()] = k
-    input_map[sym.lower()] = k
-    for alt in alternatives.get(k, []):
-        input_map[alt.lower()] = k
-
-# For one-off CLI parsing: map common operator tokens to functions
-token_to_func: dict[str, Callable[[float, float], float]] = {
-    "+": add,
-    "add": add,
-    "plus": add,
-    "-": subtract,
-    "sub": subtract,
-    "subtract": subtract,
-    "minus": subtract,
-    "*": multiply,
-    "x": multiply,
-    "×": multiply,
-    "mul": multiply,
-    "multiply": multiply,
-    "✖": multiply,
-    "✖️": multiply,
-    "/": divide,
-    "\\": divide,
-    "div": divide,
-    "divide": divide,
-    "÷": divide,
-    "^": power,
-    "**": power,
-    "pow": power,
-    "power": power,
-    "%": modulus,
-    "mod": modulus,
-    "modulo": modulus,
+TOKEN_TO_FUNC = {
+    "+": add, "add": add, "plus": add,
+    "-": subtract, "sub": subtract, "subtract": subtract, "minus": subtract,
+    "*": multiply, "x": multiply, "mul": multiply, "multiply": multiply,
+    "/": divide, "div": divide, "divide": divide,
+    "^": power, "**": power, "pow": power, "power": power,
+    "%": modulus, "mod": modulus, "modulo": modulus,
 }
 
 
-def print_boxed_symbol(sym: str) -> None:
-    # Center a short symbol inside a 7-char wide box for better presentation
-    width = 7
-    pad = (width - len(sym)) // 2
-    s = " " * pad + sym + " " * (width - len(sym) - pad)
-    print("╔" + "═" * width + "╗")
-    print(f"║{s}║")
-    print("╚" + "═" * width + "╝")
-
-
-def get_number(prompt: str, last_result: Optional[float] = None) -> float:
-    while True:
-        raw = input(prompt).strip()
-        if raw == "_" and last_result is not None:
-            return last_result
-        try:
-            # Accept integers and floats
-            if "." in raw:
-                return float(raw)
-            return int(raw) if raw.lstrip("-+").isdigit() else float(raw)
-        except ValueError:
-            print("Please enter a valid number (or '_' to use the last result).")
-
+# ============================================================================
+# Utility Functions
+# ============================================================================
 
 def format_result(res: float) -> str:
+    """Format result, showing integers without decimal point."""
     if isinstance(res, float) and res.is_integer():
         return str(int(res))
     return str(res)
 
 
+def clear_screen():
+    """Clear the terminal screen."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
 def compute_tokens(a_tok: str, op_tok: str, b_tok: str, last_result: Optional[float] = None) -> float:
-    # Convert tokens into numbers, support '_' for last_result
+    """Compute result from token strings."""
     def to_number(tok: str) -> float:
         if tok == "_":
             if last_result is None:
@@ -157,110 +114,287 @@ def compute_tokens(a_tok: str, op_tok: str, b_tok: str, last_result: Optional[fl
 
     a = to_number(a_tok)
     b = to_number(b_tok)
-    func = token_to_func.get(op_tok.lower())
+    func = TOKEN_TO_FUNC.get(op_tok.lower())
     if func is None:
         raise ValueError(f"Unknown operator: {op_tok}")
     return func(a, b)
 
 
 def one_off_expression(args: list[str], last_result: Optional[float] = None) -> Optional[float]:
-    # Accept either: ["2", "+", "3"] or ["2+3"] or ["2", "+3"] etc.
+    """Parse and compute a single expression from CLI arguments."""
     if not args:
         return None
-    # If single argument, try to split by spaces or common ops
+    
     if len(args) == 1:
         raw = args[0].strip()
-        # try space-separated tokens inside
-        for sep in [" ", "+", "-", "*", "/", "%", "^", "**"]:
-            if sep in raw and not raw.startswith("_"):
-                # special-case - for negative numbers, split carefully
-                # We'll try a simple approach: attempt to parse as 'a op b' with operators as token separators
-                for op in ["**", "+", "-", "*", "/", "%", "^"]:
-                    if op in raw and op != "-":
-                        parts = raw.split(op)
-                        if len(parts) == 2:
-                            a_tok, b_tok = parts[0].strip(), parts[1].strip()
-                            return compute_tokens(a_tok, op, b_tok, last_result)
-                # handle minus: try to find the operator in the middle
-                # e.g. -2--3 or 2--3 are ambiguous; skip complex cases here
-        # fallback: try eval-like parsing via whitespace
+        for op in ["**", "+", "-", "*", "/", "%", "^"]:
+            if op in raw and op != "-":
+                parts = raw.split(op)
+                if len(parts) == 2:
+                    a_tok, b_tok = parts[0].strip(), parts[1].strip()
+                    return compute_tokens(a_tok, op, b_tok, last_result)
+    
     if len(args) >= 3:
         a_tok = args[0]
         op_tok = args[1]
         b_tok = args[2]
         return compute_tokens(a_tok, op_tok, b_tok, last_result)
+    
     return None
 
 
-def interactive_menu(last_result: Optional[float] = None) -> Optional[float]:
-    print("Simple Calculator — visual symbols menu (choose by number, name, or symbol)")
-    while True:
-        print("\nSelect operation (or type 'exit' to quit):\n")
-        for k, (name, sym, _) in ops.items():
-            print_boxed_symbol(sym)
-            print(f" {k}. {name}\n")
+# ============================================================================
+# Calculator Display UI
+# ============================================================================
 
-        choice_raw = input("Enter choice (e.g. 1 or + or add): ").strip()
-        choice = choice_raw.lower()
-        if choice == "0" or choice == "exit":
-            print("Goodbye!")
-            return None
-
-        op_key = input_map.get(choice)
-        if op_key is None:
-            print("Invalid choice, please try again. You can enter a number (1-6), a symbol like + or ×, or words like 'add'.")
-            continue
-
-        a = get_number("Enter first number: ", last_result)
-        b = get_number("Enter second number: ", last_result)
-        _, sym, func = ops[op_key]
+class CalculatorUI:
+    """A real-looking calculator interface."""
+    
+    def __init__(self):
+        self.display = "0"
+        self.current_input = ""
+        self.operator = None
+        self.first_operand = None
+        self.new_number = True
+    
+    def draw_display(self):
+        """Draw the calculator display screen."""
+        print("\n" + "╔" + "═" * 40 + "╗")
+        print("║" + " " * 40 + "║")
+        
+        # Show the display value (right-aligned)
+        display_str = str(self.display)
+        if len(display_str) > 35:
+            display_str = display_str[-35:]
+        padding = 35 - len(display_str)
+        print(f"║{' ' * padding}{display_str}{' ' * 5}║")
+        print("║" + " " * 40 + "║")
+        print("╚" + "═" * 40 + "╝\n")
+    
+    def draw_buttons(self):
+        """Draw the calculator button grid."""
+        buttons = [
+            ["7", "8", "9", "/"],
+            ["4", "5", "6", "*"],
+            ["1", "2", "3", "-"],
+            ["0", ".", "=", "+"],
+            ["C", "^", "%", "←"],
+        ]
+        
+        button_width = 9
+        
+        for row in buttons:
+            print("  ", end="")
+            for btn in row:
+                print(f"┌─────────┐", end="  ")
+            print()
+            
+            print("  ", end="")
+            for btn in row:
+                centered = btn.center(9)
+                print(f"│{centered}│", end="  ")
+            print()
+            
+            print("  ", end="")
+            for btn in row:
+                print(f"└─────────┘", end="  ")
+            print()
+    
+    def process_input(self, btn: str) -> bool:
+        """Process a button press. Returns False if calculator should exit."""
+        
+        if btn == "C":
+            # Clear
+            self.display = "0"
+            self.current_input = ""
+            self.operator = None
+            self.first_operand = None
+            self.new_number = True
+        
+        elif btn == "←":
+            # Backspace
+            if self.current_input:
+                self.current_input = self.current_input[:-1]
+                self.display = self.current_input if self.current_input else "0"
+            elif self.display != "0":
+                self.display = self.display[:-1] if len(self.display) > 1 else "0"
+        
+        elif btn == ".":
+            # Decimal point
+            if self.new_number:
+                self.current_input = "0."
+                self.display = "0."
+                self.new_number = False
+            elif "." not in self.current_input:
+                self.current_input += "."
+                self.display = self.current_input
+        
+        elif btn.isdigit():
+            # Number input
+            if self.new_number:
+                self.current_input = btn
+                self.new_number = False
+            else:
+                self.current_input += btn
+            self.display = self.current_input
+        
+        elif btn in OPERATORS or btn == "^" or btn == "%":
+            # Operator
+            if self.operator and self.current_input and self.first_operand is not None:
+                # Chain calculation
+                try:
+                    result = compute_tokens(str(self.first_operand), self.operator, self.current_input)
+                    self.first_operand = result
+                    self.display = format_result(result)
+                except ZeroDivisionError:
+                    self.display = "Error: Division by zero"
+                except Exception as e:
+                    self.display = f"Error: {str(e)}"
+                self.current_input = ""
+            elif self.current_input:
+                try:
+                    self.first_operand = float(self.current_input)
+                except ValueError:
+                    self.display = "Error: Invalid number"
+                    return True
+                self.current_input = ""
+            elif self.first_operand is None:
+                try:
+                    self.first_operand = float(self.display)
+                except ValueError:
+                    self.display = "Error: Invalid number"
+                    return True
+            
+            self.operator = btn
+            self.new_number = True
+        
+        elif btn == "=":
+            # Calculate
+            if self.operator and self.current_input and self.first_operand is not None:
+                try:
+                    result = compute_tokens(str(self.first_operand), self.operator, self.current_input)
+                    self.display = format_result(result)
+                    self.first_operand = result
+                    self.current_input = ""
+                    self.operator = None
+                    self.new_number = True
+                except ZeroDivisionError:
+                    self.display = "Error: Division by zero"
+                except Exception as e:
+                    self.display = f"Error: {str(e)}"
+            elif self.first_operand is not None:
+                self.display = format_result(self.first_operand)
+                self.current_input = ""
+        
+        return True
+    
+    def run(self) -> int:
+        """Run the interactive calculator."""
         try:
-            result = func(a, b)
-        except ZeroDivisionError as e:
-            print(e)
-            continue
+            while True:
+                clear_screen()
+                print("\n" + "=" * 50)
+                print("         CALCULATOR".center(50))
+                print("=" * 50)
+                
+                self.draw_display()
+                self.draw_buttons()
+                
+                print("\n  (Enter button or type 'quit' to exit)")
+                user_input = input("  Button: ").strip().lower()
+                
+                if user_input == "quit":
+                    clear_screen()
+                    print("Thank you for using Calculator!")
+                    return 0
+                
+                # Match input to button
+                valid_buttons = ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-",
+                                "0", ".", "=", "+", "c", "^", "%", "←", "backspace"]
+                
+                if user_input in valid_buttons:
+                    btn = user_input
+                    if btn == "backspace":
+                        btn = "←"
+                    if btn == "c":
+                        btn = "C"
+                    self.process_input(btn)
+                else:
+                    print("Invalid button. Please try again.")
+                    input("Press Enter to continue...")
+        
+        except KeyboardInterrupt:
+            print("\n\nCalculator closed.")
+            return 0
 
-        print(f"Result ({sym}): {format_result(result)}")
-        return result
 
+# ============================================================================
+# REPL Mode
+# ============================================================================
 
-def repl_mode() -> None:
-    print("REPL mode — enter expressions like: 2 + 3   (use _ for last result). Type 'quit' to exit.")
+def repl_mode() -> int:
+    """Run REPL mode for chaining calculations."""
+    print("\n" + "=" * 50)
+    print("         CALCULATOR - REPL MODE".center(50))
+    print("=" * 50)
+    print("\nEnter expressions like: 2 + 3")
+    print("Use '_' to reference the last result")
+    print("Type 'quit' or 'exit' to exit.\n")
+    
     last = None
-    while True:
-        raw = input("> ").strip()
-        if not raw:
-            continue
-        if raw.lower() in ("quit", "exit"):
-            break
-        # try to split into tokens naively
-        tokens = raw.split()
-        try:
-            res = one_off_expression(tokens, last)
-            if res is None:
-                print("Could not parse expression. Try: number operator number")
+    
+    try:
+        while True:
+            raw = input("> ").strip()
+            
+            if not raw:
                 continue
-            last = res
-            print(format_result(res))
-        except Exception as e:
-            print("Error:", e)
+            
+            if raw.lower() in ("quit", "exit"):
+                print("Goodbye!")
+                return 0
+            
+            tokens = raw.split()
+            
+            try:
+                res = one_off_expression(tokens, last)
+                if res is None:
+                    print("Could not parse expression. Try: number operator number")
+                    continue
+                last = res
+                print(f"= {format_result(res)}\n")
+            except ZeroDivisionError as e:
+                print(f"Error: {e}\n")
+            except Exception as e:
+                print(f"Error: {e}\n")
+    
+    except KeyboardInterrupt:
+        print("\n\nCalculator closed.")
+        return 0
 
+
+# ============================================================================
+# Main
+# ============================================================================
 
 def main(argv: Optional[list[str]] = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
-    parser = argparse.ArgumentParser(description="Simple Calculator — CLI and interactive modes")
-    parser.add_argument("expr", nargs="*", help="One-off expression, e.g. 2 + 3 or '2 + 3'", )
-    parser.add_argument("--repl", action="store_true", help="Start REPL mode to chain calculations")
+    parser = argparse.ArgumentParser(
+        description="Simple Calculator — Interactive UI, CLI, and REPL modes",
+        prog="calculator"
+    )
+    parser.add_argument("expr", nargs="*", help="One-off expression (e.g., '2 + 3')")
+    parser.add_argument("--repl", action="store_true", help="Start REPL mode for chaining calculations")
+    
     ns = parser.parse_args(argv)
 
     # REPL mode
     if ns.repl:
-        repl_mode()
-        return 0
+        return repl_mode()
 
-    # One-off expression from CLI arguments
+    # One-off expression
     if ns.expr:
         try:
             res = one_off_expression(ns.expr)
@@ -270,17 +404,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(format_result(res))
             return 0
         except Exception as e:
-            print("Error:", e)
+            print(f"Error: {e}")
             return 3
 
-    # Otherwise, fall back to interactive menu
-    last = None
-    while True:
-        res = interactive_menu(last)
-        if res is None:
-            break
-        last = res
-    return 0
+    # Interactive calculator UI
+    calc = CalculatorUI()
+    return calc.run()
 
 
 if __name__ == "__main__":
